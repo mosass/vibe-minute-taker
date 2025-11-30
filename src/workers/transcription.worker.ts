@@ -240,9 +240,11 @@ function resampleAudio(
  */
 self.onmessage = async (event: MessageEvent<TranscriptionWorkerMessage>) => {
   const message = event.data;
+  console.log('[Worker] Received message:', message.type);
 
   switch (message.type) {
     case 'init':
+      console.log('[Worker] Initializing pipeline with model:', message.modelId);
       await initializePipeline(message.modelId);
       break;
 

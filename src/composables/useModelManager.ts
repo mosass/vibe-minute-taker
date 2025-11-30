@@ -68,9 +68,14 @@ let workerInstance: Worker | null = null;
 function getOrCreateWorker(): Worker {
   if (!workerInstance) {
     workerInstance = new Worker(
-      new URL('@/workers/transcription.worker.ts', import.meta.url),
+      new URL('../workers/transcription.worker.ts', import.meta.url),
       { type: 'module' }
     );
+    
+    // Add error handler to catch worker errors
+    workerInstance.onerror = (event) => {
+      console.error('[ModelManager] Worker error:', event);
+    };
   }
   return workerInstance;
 }
@@ -211,10 +216,12 @@ export function useModelManager(initialModelId?: string) {
 
       // Get or create worker
       const worker = getOrCreateWorker();
+      console.log('[ModelManager] Worker created, sending init message for:', targetModelId);
 
       // Set up message handler
       return new Promise<void>((resolve, reject) => {
         const handleMessage = (event: MessageEvent<TranscriptionWorkerResponse>) => {
+          console.log('[ModelManager] Received message from worker:', event.data);
           handleWorkerProgress(event.data);
 
           if (event.data.type === 'ready') {

@@ -104,18 +104,18 @@
 
 ### Transcription UI Components
 
-- [ ] T026 [P] [US1] Create `src/components/transcription/TranscriptionProgress.vue`:
+- [x] T026 [P] [US1] Create `src/components/transcription/TranscriptionProgress.vue`:
   - Processing spinner/animation
   - Progress percentage
   - Status messages
-- [ ] T027 [P] [US1] Create `src/components/transcription/TranscriptView.vue`:
+- [x] T027 [P] [US1] Create `src/components/transcription/TranscriptView.vue`:
   - Display transcript text
   - Show timestamps for segments
   - Scrollable container
 
 ### Model Download UI
 
-- [ ] T028 [US1] Create `src/components/setup/ModelDownloader.vue`:
+- [x] T028 [US1] Create `src/components/setup/ModelDownloader.vue`:
   - First-run experience
   - Download progress bar
   - Size estimate and ETA
@@ -123,7 +123,7 @@
 
 ### Main Recording View
 
-- [ ] T029 [US1] Create `src/views/HomeView.vue`:
+- [x] T029 [US1] Create `src/views/HomeView.vue`:
   - Check model status on mount
   - Show ModelDownloader if needed
   - Recording interface when ready
