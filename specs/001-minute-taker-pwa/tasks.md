@@ -88,16 +88,16 @@
 
 ### Recording UI Components
 
-- [ ] T022 [P] [US1] Create `src/components/recording/RecordButton.vue`:
+- [x] T022 [P] [US1] Create `src/components/recording/RecordButton.vue`:
   - Large FAB-style record button
   - Visual states: idle, recording, processing
-- [ ] T023 [P] [US1] Create `src/components/recording/RecordingTimer.vue`:
+- [x] T023 [P] [US1] Create `src/components/recording/RecordingTimer.vue`:
   - Elapsed time display (MM:SS)
   - Pulsing recording indicator
-- [ ] T024 [P] [US1] Create `src/components/recording/WaveformVisualizer.vue`:
+- [x] T024 [P] [US1] Create `src/components/recording/WaveformVisualizer.vue`:
   - Real-time audio amplitude visualization
   - Canvas-based animation
-- [ ] T025 [P] [US1] Create `src/components/recording/RecordingControls.vue`:
+- [x] T025 [P] [US1] Create `src/components/recording/RecordingControls.vue`:
   - Pause/resume button
   - Stop button
   - Cancel button
