@@ -142,7 +142,7 @@
 
 ### Meeting Data Service
 
-- [ ] T030 [US2] Create `useMeetings` composable in `src/composables/useMeetings.ts`:
+- [x] T030 [US2] Create `useMeetings` composable in `src/composables/useMeetings.ts`:
   - CRUD operations for meetings
   - Load all meetings sorted by date
   - Get single meeting by ID
@@ -151,23 +151,23 @@
 
 ### Meeting List Components
 
-- [ ] T031 [P] [US2] Create `src/components/meetings/MeetingCard.vue`:
+- [x] T031 [P] [US2] Create `src/components/meetings/MeetingCard.vue`:
   - Meeting title, date, duration
   - Transcript preview (first 100 chars)
   - Status indicator
   - Swipe-to-delete gesture
-- [ ] T032 [US2] Create `src/components/meetings/MeetingList.vue`:
+- [x] T032 [US2] Create `src/components/meetings/MeetingList.vue`:
   - List of MeetingCard components
   - Empty state when no meetings
   - Loading state
 
 ### Meeting Detail Components
 
-- [ ] T033 [P] [US2] Create `src/components/transcription/TranscriptEditor.vue`:
+- [x] T033 [P] [US2] Create `src/components/transcription/TranscriptEditor.vue`:
   - Editable textarea for transcript
   - Auto-save on blur
   - Character count
-- [ ] T034 [US2] Create `src/components/meetings/MeetingDetail.vue`:
+- [x] T034 [US2] Create `src/components/meetings/MeetingDetail.vue`:
   - Meeting header (title, date, duration)
   - Full transcript view
   - Edit mode toggle
@@ -176,11 +176,11 @@
 
 ### Meeting Views
 
-- [ ] T035 [US2] Create `src/views/MeetingsView.vue`:
+- [x] T035 [US2] Create `src/views/MeetingsView.vue`:
   - Header with title
   - MeetingList component
   - Navigation to detail
-- [ ] T036 [US2] Create `src/views/MeetingDetailView.vue`:
+- [x] T036 [US2] Create `src/views/MeetingDetailView.vue`:
   - Load meeting by route param
   - MeetingDetail component
   - Back navigation
