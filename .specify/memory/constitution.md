@@ -1,50 +1,64 @@
-# [PROJECT_NAME] Constitution
-<!-- Example: Spec Constitution, TaskFlow Constitution, etc. -->
+# PWA Minute Taker Constitution
 
 ## Core Principles
 
-### [PRINCIPLE_1_NAME]
-<!-- Example: I. Library-First -->
-[PRINCIPLE_1_DESCRIPTION]
-<!-- Example: Every feature starts as a standalone library; Libraries must be self-contained, independently testable, documented; Clear purpose required - no organizational-only libraries -->
+### I. PWA-First Development
+Every feature must leverage Progressive Web App capabilities to the fullest. The app must work completely offline, be installable, and provide a native-like experience. PWA features are not afterthoughts but core requirements.
 
-### [PRINCIPLE_2_NAME]
-<!-- Example: II. CLI Interface -->
-[PRINCIPLE_2_DESCRIPTION]
-<!-- Example: Every library exposes functionality via CLI; Text in/out protocol: stdin/args → stdout, errors → stderr; Support JSON + human-readable formats -->
+### II. Edge AI Processing
+All AI processing happens locally in the browser using Transformers.js. No data is sent to external servers. User privacy is paramount - audio and transcripts never leave the device.
 
-### [PRINCIPLE_3_NAME]
-<!-- Example: III. Test-First (NON-NEGOTIABLE) -->
-[PRINCIPLE_3_DESCRIPTION]
-<!-- Example: TDD mandatory: Tests written → User approved → Tests fail → Then implement; Red-Green-Refactor cycle strictly enforced -->
+### III. Offline-Complete Functionality
+The app must be fully functional without network connectivity. All features including recording, transcription, and note management must work offline. Online connectivity should only enhance, never be required.
 
-### [PRINCIPLE_4_NAME]
-<!-- Example: IV. Integration Testing -->
-[PRINCIPLE_4_DESCRIPTION]
-<!-- Example: Focus areas requiring integration tests: New library contract tests, Contract changes, Inter-service communication, Shared schemas -->
+### IV. Demo-Ready Development
+This app serves as a demo for a ~2 hour PWA session. Code should be clear, well-documented, and showcase PWA capabilities in a way that's easy to explain and demonstrate. Each PWA feature should be visibly demonstrable.
 
-### [PRINCIPLE_5_NAME]
-<!-- Example: V. Observability, VI. Versioning & Breaking Changes, VII. Simplicity -->
-[PRINCIPLE_5_DESCRIPTION]
-<!-- Example: Text I/O ensures debuggability; Structured logging required; Or: MAJOR.MINOR.BUILD format; Or: Start simple, YAGNI principles -->
+### V. Simplicity & Clarity
+Since this is a demo app, prioritize clarity over complexity. Use straightforward implementations that clearly demonstrate PWA concepts. Avoid over-engineering - the goal is education, not production scale.
 
-## [SECTION_2_NAME]
-<!-- Example: Additional Constraints, Security Requirements, Performance Standards, etc. -->
+## Technical Constraints
 
-[SECTION_2_CONTENT]
-<!-- Example: Technology stack requirements, compliance standards, deployment policies, etc. -->
+### Technology Stack
+- **Framework**: Vue.js 3 (Composition API, SPA)
+- **Styling**: Tailwind CSS
+- **AI**: Transformers.js (Whisper model for speech-to-text)
+- **Storage**: OPFS (Origin Private File System) for models and audio
+- **Build**: Vite with PWA plugin
 
-## [SECTION_3_NAME]
-<!-- Example: Development Workflow, Review Process, Quality Gates, etc. -->
+### PWA Requirements (Must Demonstrate)
+1. **Service Worker**: Offline caching of all app assets
+2. **Web App Manifest**: Installable with app icon and splash
+3. **OPFS**: Store large files (AI models, audio recordings)
+4. **Web Audio API**: Recording and audio processing
+5. **Background Sync** (optional): Queue actions when offline
+6. **Push Notifications** (optional): Meeting reminders
+7. **Media Session API**: Control recording from lock screen
+8. **Share Target**: Receive shared audio files
 
-[SECTION_3_CONTENT]
-<!-- Example: Code review requirements, testing gates, deployment approval process, etc. -->
+### Performance Standards
+- First load: < 3 seconds on 3G
+- Time to interactive: < 5 seconds
+- Model loading: Progressive with status indicator
+- Audio recording: Real-time without drops
+
+## Development Workflow
+
+### Code Organization
+Single-project Vue.js SPA structure with clear component separation. Keep related code together for demo clarity.
+
+### Documentation
+All PWA features must be documented with:
+- What capability it demonstrates
+- How to trigger/show in demo
+- Why it matters for PWA
 
 ## Governance
-<!-- Example: Constitution supersedes all other practices; Amendments require documentation, approval, migration plan -->
 
-[GOVERNANCE_RULES]
-<!-- Example: All PRs/reviews must verify compliance; Complexity must be justified; Use [GUIDANCE_FILE] for runtime development guidance -->
+This constitution guides all development decisions. When in doubt:
+1. Does it work offline? (must)
+2. Does it demonstrate a PWA feature? (should)
+3. Is it easy to explain in a demo? (should)
+4. Is it the simplest solution? (prefer)
 
-**Version**: [CONSTITUTION_VERSION] | **Ratified**: [RATIFICATION_DATE] | **Last Amended**: [LAST_AMENDED_DATE]
-<!-- Example: Version: 2.1.1 | Ratified: 2025-06-13 | Last Amended: 2025-07-16 -->
+**Version**: 1.0.0 | **Ratified**: 2025-12-01 | **Last Amended**: 2025-12-01
