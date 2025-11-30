@@ -69,19 +69,19 @@
 
 ### AI Model & Transcription
 
-- [ ] T018 [US1] Create transcription worker in `src/workers/transcription.worker.ts`:
+- [x] T018 [US1] Create transcription worker in `src/workers/transcription.worker.ts`:
   - Load Whisper model from Transformers.js
   - Handle init, transcribe, progress messages
   - Return transcription with timestamps
-- [ ] T019 [US1] Create model service in `src/services/model.service.ts`:
+- [x] T019 [US1] Create model service in `src/services/model.service.ts`:
   - Download model to OPFS on first use
   - Track download progress
   - Check if model exists
-- [ ] T020 [US1] Create `useModelManager` composable in `src/composables/useModelManager.ts`:
+- [x] T020 [US1] Create `useModelManager` composable in `src/composables/useModelManager.ts`:
   - Model status (downloading, ready, error)
   - Progress percentage
   - Retry functionality
-- [ ] T021 [US1] Create transcription service in `src/services/transcription.service.ts`:
+- [x] T021 [US1] Create transcription service in `src/services/transcription.service.ts`:
   - Initialize worker
   - Convert WebM to WAV for Whisper
   - Handle transcription result
