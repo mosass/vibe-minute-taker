@@ -4,19 +4,25 @@
  * 
  * This is the primary entry point for recording meetings
  * and transcribing audio using edge AI.
+ * 
+ * Supports two modes:
+ * - Batch mode: Record first, then transcribe after stopping
+ * - Live mode: Real-time transcription during recording
  */
 
-import { ref, computed, onMounted, watch } from 'vue';
+import { ref, computed, onMounted, watch, onUnmounted } from 'vue';
 import { useRouter } from 'vue-router';
 
 // Composables
 import { useModelManager } from '@/composables/useModelManager';
 import { useAudioRecorder } from '@/composables/useAudioRecorder';
+import { useTranscription } from '@/composables/useTranscription';
 
 // Services
 import { 
   transcribeAudio, 
   validateAudioBlob,
+  convertAudioToFloat32,
   type TranscriptionProgressCallback
 } from '@/services/transcription.service';
 import { createMeeting, createAudioFile } from '@/services/db.service';
@@ -35,11 +41,11 @@ import OfflineBadge from '@/components/setup/OfflineBadge.vue';
 // Types
 import type { Meeting, TranscriptSegment } from '@/types/meeting';
 import type { AudioFile, RecordingResult } from '@/types/audio';
-import type { TranscriptionResult } from '@/types/transcription';
+import type { TranscriptionResult, TranscriptionSegment as TransSegment } from '@/types/transcription';
 
 // Utils
 import { generateMeetingTitle } from '@/utils/formatters';
-import { ERROR_MESSAGES } from '@/utils/constants';
+import { ERROR_MESSAGES, STORAGE_KEYS, AUDIO_CONFIG } from '@/utils/constants';
 
 // Router
 const router = useRouter();
@@ -51,6 +57,11 @@ type ViewState = 'loading' | 'needsModel' | 'ready' | 'recording' | 'processing'
 const viewState = ref<ViewState>('loading');
 const errorMessage = ref<string | null>(null);
 
+// Live transcription mode state
+const isLiveMode = ref(false);
+const liveTranscriptText = ref('');
+const liveTranscriptSegments = ref<TransSegment[]>([]);
+
 // Transcription state
 const transcriptionStage = ref<'converting' | 'transcribing' | 'complete'>('converting');
 const transcriptionProgress = ref(0);
@@ -60,12 +71,17 @@ const transcriptionMessage = ref('');
 const transcriptionResult = ref<TranscriptionResult | null>(null);
 const savedMeetingId = ref<string | null>(null);
 
+// Audio chunks for live transcription
+const audioChunks = ref<Blob[]>([]);
+const lastProcessedChunkIndex = ref(0);
+const chunkProcessingInterval = ref<ReturnType<typeof setInterval> | null>(null);
+
 // Model manager
 const {
   checkModelStatus
 } = useModelManager();
 
-// Audio recorder
+// Audio recorder with chunk callback for live mode
 const {
   state: recordingState,
   isRecording,
@@ -81,7 +97,28 @@ const {
   cancel: cancelRecording,
   clearError: clearRecorderError
 } = useAudioRecorder({
-  enableVisualization: true
+  enableVisualization: true,
+  onDataChunk: handleAudioChunk
+});
+
+// Transcription composable for live mode
+const {
+  startStreaming,
+  sendChunk,
+  endStreaming,
+  abort: abortTranscription,
+  partialText,
+  partialSegments,
+  isStreaming
+} = useTranscription({
+  onPartialResult: (text, segments) => {
+    liveTranscriptText.value = text;
+    liveTranscriptSegments.value = segments;
+  },
+  onError: (error) => {
+    console.error('Live transcription error:', error);
+    // Don't fail the recording, just log it
+  }
 });
 
 // Computed
@@ -91,11 +128,125 @@ const recordButtonState = computed(() => {
   return 'idle';
 });
 
+// Watch for partial transcript updates in live mode
+watch(partialText, (text) => {
+  if (isLiveMode.value && text) {
+    liveTranscriptText.value = text;
+  }
+});
+
+watch(partialSegments, (segments) => {
+  if (isLiveMode.value && segments.length > 0) {
+    // Clone to avoid readonly assignment issues
+    liveTranscriptSegments.value = segments.map(s => ({ ...s }));
+  }
+});
+
+/**
+ * Load live mode preference from storage
+ */
+function loadLiveModePreference(): void {
+  try {
+    const saved = localStorage.getItem(STORAGE_KEYS.LIVE_TRANSCRIPTION);
+    if (saved === 'true') {
+      isLiveMode.value = true;
+    }
+  } catch {
+    // Storage not available
+  }
+}
+
+/**
+ * Save live mode preference to storage
+ */
+function saveLiveModePreference(): void {
+  try {
+    localStorage.setItem(STORAGE_KEYS.LIVE_TRANSCRIPTION, String(isLiveMode.value));
+  } catch {
+    // Storage not available
+  }
+}
+
+/**
+ * Toggle live transcription mode
+ */
+function toggleLiveMode(): void {
+  if (isRecording.value) return; // Can't toggle during recording
+  isLiveMode.value = !isLiveMode.value;
+  saveLiveModePreference();
+}
+
+/**
+ * Handle audio data chunk from recorder
+ */
+function handleAudioChunk(chunk: Blob): void {
+  if (!isLiveMode.value) return;
+  audioChunks.value.push(chunk);
+}
+
+/**
+ * Process accumulated audio chunks for live transcription
+ */
+async function processAudioChunksForLive(): Promise<void> {
+  if (!isLiveMode.value || !isStreaming.value) return;
+  
+  // Get unprocessed chunks
+  const unprocessedChunks = audioChunks.value.slice(lastProcessedChunkIndex.value);
+  
+  if (unprocessedChunks.length === 0) return;
+  
+  // Combine chunks into a single blob
+  const combinedBlob = new Blob(unprocessedChunks, { type: 'audio/webm' });
+  
+  // Only process if we have enough audio (at least ~3 seconds worth)
+  // Rough estimate: ~32KB per second at typical WebM bitrate
+  if (combinedBlob.size < 50000) return;
+  
+  try {
+    // Convert to Float32Array
+    const { audioData, sampleRate } = await convertAudioToFloat32(
+      combinedBlob,
+      AUDIO_CONFIG.SAMPLE_RATE
+    );
+    
+    // Send to worker
+    await sendChunk(audioData, sampleRate);
+    
+    // Mark chunks as processed
+    lastProcessedChunkIndex.value = audioChunks.value.length;
+  } catch (error) {
+    console.error('Error processing live audio chunk:', error);
+  }
+}
+
+/**
+ * Start live chunk processing interval
+ */
+function startLiveChunkProcessing(): void {
+  if (chunkProcessingInterval.value) return;
+  
+  // Process chunks every 5 seconds
+  chunkProcessingInterval.value = setInterval(() => {
+    processAudioChunksForLive();
+  }, 5000);
+}
+
+/**
+ * Stop live chunk processing interval
+ */
+function stopLiveChunkProcessing(): void {
+  if (chunkProcessingInterval.value) {
+    clearInterval(chunkProcessingInterval.value);
+    chunkProcessingInterval.value = null;
+  }
+}
+
 /**
  * Check if model is ready on mount
  */
 async function initializeView(): Promise<void> {
   viewState.value = 'loading';
+  loadLiveModePreference();
   
   const ready = await checkModelStatus();
   
@@ -118,11 +269,22 @@ function handleModelReady(): void {
  */
 async function handleRecordStart(): Promise<void> {
   errorMessage.value = null;
+  audioChunks.value = [];
+  lastProcessedChunkIndex.value = 0;
+  liveTranscriptText.value = '';
+  liveTranscriptSegments.value = [];
   
   try {
+    // Start streaming transcription if in live mode
+    if (isLiveMode.value) {
+      await startStreaming();
+      startLiveChunkProcessing();
+    }
+    
     await startRecording();
     viewState.value = 'recording';
   } catch (err) {
+    stopLiveChunkProcessing();
     errorMessage.value = err instanceof Error ? err.message : ERROR_MESSAGES.RECORDING_FAILED;
     viewState.value = 'error';
   }
@@ -133,6 +295,7 @@ async function handleRecordStart(): Promise<void> {
  */
 async function handleRecordStop(): Promise<void> {
   errorMessage.value = null;
+  stopLiveChunkProcessing();
   
   try {
     // Stop recording and get result
@@ -144,7 +307,30 @@ async function handleRecordStop(): Promise<void> {
       throw new Error(validation.error);
     }
     
-    // Start transcription process
+    // If in live mode, get final result from streaming
+    if (isLiveMode.value && isStreaming.value) {
+      try {
+        // Process any remaining chunks
+        await processAudioChunksForLive();
+        
+        // End streaming and get final result
+        const streamResult = await endStreaming();
+        
+        // Use streaming result if available, otherwise fall back to batch
+        if (streamResult.text.trim()) {
+          transcriptionResult.value = streamResult;
+          await saveMeeting(result, streamResult);
+          transcriptionStage.value = 'complete';
+          viewState.value = 'complete';
+          return;
+        }
+      } catch (streamError) {
+        console.error('Streaming finalization failed, falling back to batch:', streamError);
+        // Fall through to batch transcription
+      }
+    }
+    
+    // Batch transcription (default or fallback)
     await processRecording(result);
   } catch (err) {
     errorMessage.value = err instanceof Error ? err.message : ERROR_MESSAGES.RECORDING_FAILED;
@@ -157,6 +343,8 @@ async function handleRecordStop(): Promise<void> {
  */
 function handlePause(): void {
   pauseRecording();
+  // Pause live chunk processing when paused
+  stopLiveChunkProcessing();
 }
 
 /**
@@ -164,6 +352,10 @@ function handlePause(): void {
  */
 function handleResume(): void {
   resumeRecording();
+  // Resume live chunk processing
+  if (isLiveMode.value) {
+    startLiveChunkProcessing();
+  }
 }
 
 /**
@@ -171,6 +363,12 @@ function handleResume(): void {
  */
 function handleCancel(): void {
   cancelRecording();
+  stopLiveChunkProcessing();
+  abortTranscription();
+  audioChunks.value = [];
+  lastProcessedChunkIndex.value = 0;
+  liveTranscriptText.value = '';
+  liveTranscriptSegments.value = [];
   viewState.value = 'ready';
 }
 
@@ -276,6 +474,10 @@ function startNewRecording(): void {
   transcriptionResult.value = null;
   savedMeetingId.value = null;
   errorMessage.value = null;
+  audioChunks.value = [];
+  lastProcessedChunkIndex.value = 0;
+  liveTranscriptText.value = '';
+  liveTranscriptSegments.value = [];
   viewState.value = 'ready';
 }
 
@@ -294,6 +496,8 @@ function viewMeeting(): void {
 function handleRetry(): void {
   clearRecorderError();
   errorMessage.value = null;
+  stopLiveChunkProcessing();
+  abortTranscription();
   viewState.value = 'ready';
 }
 
@@ -307,6 +511,12 @@ watch(recorderError, (error) => {
 // Initialize on mount
 onMounted(() => {
   initializeView();
+});
+
+// Cleanup on unmount
+onUnmounted(() => {
+  stopLiveChunkProcessing();
+  abortTranscription();
 });
 </script>
 
@@ -345,6 +555,39 @@ onMounted(() => {
         </p>
       </div>
       
+      <!-- Live mode toggle -->
+      <div class="flex items-center gap-3">
+        <button
+          type="button"
+          :class="[
+            'relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent',
+            'transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2',
+            isLiveMode ? 'bg-primary-500' : 'bg-gray-200 dark:bg-gray-700'
+          ]"
+          role="switch"
+          :aria-checked="isLiveMode"
+          @click="toggleLiveMode"
+        >
+          <span class="sr-only">Enable live transcription</span>
+          <span
+            :class="[
+              'pointer-events-none inline-block h-5 w-5 rounded-full bg-white shadow ring-0',
+              'transition duration-200 ease-in-out',
+              isLiveMode ? 'translate-x-5' : 'translate-x-0'
+            ]"
+          />
+        </button>
+        <span class="text-sm font-medium text-gray-700 dark:text-gray-300">
+          Live transcription
+        </span>
+        <span 
+          v-if="isLiveMode"
+          class="inline-flex items-center rounded-md bg-primary-50 dark:bg-primary-900/30 px-2 py-1 text-xs font-medium text-primary-700 dark:text-primary-300"
+        >
+          Beta
+        </span>
+      </div>
+      
       <!-- Waveform placeholder -->
       <div class="w-full max-w-md">
         <WaveformVisualizer
@@ -366,7 +609,7 @@ onMounted(() => {
       <div class="flex flex-col items-center gap-2">
         <OfflineBadge variant="success" size="sm" />
         <p class="text-sm text-gray-500 dark:text-gray-500">
-          All transcription happens on your device
+          {{ isLiveMode ? 'See your transcript as you speak' : 'All transcription happens on your device' }}
         </p>
       </div>
     </div>
@@ -374,8 +617,20 @@ onMounted(() => {
     <!-- Recording state -->
     <div 
       v-else-if="viewState === 'recording'"
-      class="flex-1 flex flex-col items-center justify-center p-4 space-y-8"
+      class="flex-1 flex flex-col items-center justify-center p-4 space-y-6"
     >
+      <!-- Live mode indicator -->
+      <div 
+        v-if="isLiveMode" 
+        class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-primary-100 dark:bg-primary-900/40 text-primary-700 dark:text-primary-300 text-sm"
+      >
+        <span class="relative flex h-2 w-2">
+          <span class="absolute inline-flex h-full w-full animate-ping rounded-full bg-primary-400 opacity-75"></span>
+          <span class="relative inline-flex h-2 w-2 rounded-full bg-primary-500"></span>
+        </span>
+        Live transcription active
+      </div>
+      
       <!-- Timer -->
       <RecordingTimer
         :seconds="elapsedSeconds"
@@ -383,6 +638,16 @@ onMounted(() => {
         :is-paused="isPaused"
         size="lg"
       />
+      
+      <!-- Live transcript preview (when in live mode) -->
+      <div 
+        v-if="isLiveMode && liveTranscriptText"
+        class="w-full max-w-md bg-gray-50 dark:bg-gray-800 rounded-xl p-4 max-h-32 overflow-y-auto"
+      >
+        <p class="text-sm text-gray-700 dark:text-gray-300 italic">
+          "{{ liveTranscriptText }}"
+        </p>
+      </div>
       
       <!-- Waveform -->
       <div class="w-full max-w-md">

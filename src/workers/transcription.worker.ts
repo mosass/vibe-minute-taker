@@ -2,6 +2,7 @@
  * Transcription Web Worker
  * Runs Whisper speech-to-text model from Transformers.js in a background thread
  * Handles model initialization, transcription, and progress reporting
+ * Supports both batch and streaming transcription modes
  */
 
 import { pipeline } from '@huggingface/transformers';
@@ -23,6 +24,12 @@ interface TranscriberPipeline {
 let transcriber: TranscriberPipeline | null = null;
 let currentModelId: string | null = null;
 let isInitializing = false;
+
+// Streaming state
+let isStreamingActive = false;
+let streamingAborted = false;
+let accumulatedChunks: { text: string; timestamp?: [number, number] }[] = [];
+let lastProcessedOffset = 0; // Track time offset for continuous streaming
 
 /**
  * Send a message back to the main thread
@@ -236,6 +243,168 @@ function resampleAudio(
 }
 
 /**
+ * Start streaming transcription session
+ */
+function startStreaming(): void {
+  isStreamingActive = true;
+  streamingAborted = false;
+  accumulatedChunks = [];
+  lastProcessedOffset = 0;
+  console.log('[Worker] Streaming session started');
+  postResponse({ type: 'stream-ready' });
+}
+
+/**
+ * Process a streaming audio chunk
+ * This transcribes a chunk and sends partial results
+ */
+async function processStreamingChunk(
+  audioData: Float32Array,
+  sampleRate: number,
+  chunkIndex: number
+): Promise<void> {
+  if (!transcriber) {
+    postResponse({
+      type: 'error',
+      error: 'Transcription model not initialized. Call init first.',
+    });
+    return;
+  }
+
+  if (!isStreamingActive || streamingAborted) {
+    console.log('[Worker] Streaming not active or aborted, ignoring chunk');
+    return;
+  }
+
+  try {
+    console.log(`[Worker] Processing streaming chunk ${chunkIndex}: ${audioData.length} samples at ${sampleRate}Hz`);
+
+    // Resample to 16000Hz if needed
+    let processedAudio = audioData;
+    if (sampleRate !== 16000) {
+      processedAudio = resampleAudio(audioData, sampleRate, 16000);
+    }
+
+    // Calculate chunk duration for time offset
+    const chunkDuration = processedAudio.length / 16000;
+
+    // Transcribe the chunk
+    const result = await transcriber(processedAudio, {
+      chunk_length_s: 30,
+      stride_length_s: 5,
+      return_timestamps: true,
+      language: 'en',
+    });
+
+    if (streamingAborted) {
+      return;
+    }
+
+    // Parse result
+    let chunkText = '';
+    const chunkSegments: TranscriptionSegment[] = [];
+
+    if (typeof result === 'string') {
+      chunkText = result;
+    } else if (result && typeof result === 'object') {
+      const resultObj = result as { text?: string; chunks?: Array<{ timestamp?: [number, number]; text?: string }> };
+      chunkText = resultObj.text || '';
+      
+      if (resultObj.chunks && Array.isArray(resultObj.chunks)) {
+        for (const chunk of resultObj.chunks) {
+          const start = (chunk.timestamp?.[0] ?? 0) + lastProcessedOffset;
+          const end = (chunk.timestamp?.[1] ?? 0) + lastProcessedOffset;
+          
+          accumulatedChunks.push({
+            text: chunk.text ?? '',
+            timestamp: [start, end],
+          });
+          
+          chunkSegments.push({
+            id: generateSegmentId(),
+            start,
+            end,
+            text: chunk.text ?? '',
+          });
+        }
+      }
+    }
+
+    // Update offset for next chunk
+    lastProcessedOffset += chunkDuration;
+
+    // Send partial result with accumulated text
+    const accumulatedText = accumulatedChunks.map(c => c.text).join(' ').trim();
+    
+    console.log(`[Worker] Streaming chunk ${chunkIndex} processed: "${chunkText.substring(0, 50)}..."`);
+    
+    postResponse({
+      type: 'partial',
+      text: accumulatedText,
+      segments: chunkSegments,
+    });
+
+  } catch (error) {
+    console.error('[Worker] Streaming chunk processing failed:', error);
+    postResponse({
+      type: 'error',
+      error: error instanceof Error ? error.message : 'Failed to process audio chunk',
+    });
+  }
+}
+
+/**
+ * End streaming session and return final result
+ */
+function endStreaming(): void {
+  if (!isStreamingActive) {
+    console.log('[Worker] No active streaming session to end');
+    return;
+  }
+
+  console.log('[Worker] Ending streaming session');
+
+  // Build final result from accumulated chunks
+  const finalText = accumulatedChunks.map(c => c.text).join(' ').trim();
+  const segments: TranscriptionSegment[] = accumulatedChunks.map(chunk => ({
+    id: generateSegmentId(),
+    start: chunk.timestamp?.[0] ?? 0,
+    end: chunk.timestamp?.[1] ?? 0,
+    text: chunk.text,
+  }));
+
+  const duration = segments.length > 0
+    ? Math.max(...segments.map(s => s.end))
+    : lastProcessedOffset;
+
+  const result: TranscriptionResult = {
+    text: finalText,
+    segments,
+    duration,
+    language: 'en',
+  };
+
+  // Reset streaming state
+  isStreamingActive = false;
+  streamingAborted = false;
+  accumulatedChunks = [];
+  lastProcessedOffset = 0;
+
+  postResponse({ type: 'result', result });
+}
+
+/**
+ * Abort streaming transcription
+ */
+function abortStreaming(): void {
+  console.log('[Worker] Aborting streaming session');
+  streamingAborted = true;
+  isStreamingActive = false;
+  accumulatedChunks = [];
+  lastProcessedOffset = 0;
+}
+
+/**
  * Handle messages from the main thread
  */
 self.onmessage = async (event: MessageEvent<TranscriptionWorkerMessage>) => {
@@ -252,10 +421,23 @@ self.onmessage = async (event: MessageEvent<TranscriptionWorkerMessage>) => {
       await transcribeAudio(message.audioData, message.sampleRate);
       break;
 
+    case 'stream-start':
+      startStreaming();
+      break;
+
+    case 'stream-chunk':
+      await processStreamingChunk(message.audioData, message.sampleRate, message.chunkIndex);
+      break;
+
+    case 'stream-end':
+      endStreaming();
+      break;
+
     case 'abort':
-      // Currently cannot abort mid-transcription with Transformers.js
-      // Future: implement cancellation token support
-      console.log('[Worker] Abort requested (not implemented)');
+      if (isStreamingActive) {
+        abortStreaming();
+      }
+      console.log('[Worker] Abort processed');
       break;
 
     default:

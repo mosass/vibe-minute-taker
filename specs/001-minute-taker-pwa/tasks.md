@@ -240,15 +240,15 @@
 
 ### Streaming Transcription
 
-- [ ] T042 [US4] Enhance transcription worker for streaming in `src/workers/transcription.worker.ts`:
+- [x] T042 [US4] Enhance transcription worker for streaming in `src/workers/transcription.worker.ts`:
   - Process audio in chunks
   - Send partial results
   - Merge final transcript
-- [ ] T043 [US4] Create `useTranscription` composable in `src/composables/useTranscription.ts`:
+- [x] T043 [US4] Create `useTranscription` composable in `src/composables/useTranscription.ts`:
   - Support both batch and streaming modes
   - Reactive partial transcript
   - Combine chunks into full transcript
-- [ ] T044 [US4] Update HomeView for live transcription:
+- [x] T044 [US4] Update HomeView for live transcription:
   - Toggle switch for live mode
   - Show partial transcript during recording
   - Handle mode preference

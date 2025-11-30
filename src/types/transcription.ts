@@ -61,6 +61,9 @@ export interface TranscriptionSegment {
 export type TranscriptionWorkerMessage = 
   | { type: 'init'; modelId: string }
   | { type: 'transcribe'; audioData: Float32Array; sampleRate: number }
+  | { type: 'stream-start' }
+  | { type: 'stream-chunk'; audioData: Float32Array; sampleRate: number; chunkIndex: number }
+  | { type: 'stream-end' }
   | { type: 'abort' };
 
 /**
@@ -69,7 +72,8 @@ export type TranscriptionWorkerMessage =
 export type TranscriptionWorkerResponse =
   | { type: 'progress'; progress: DownloadProgress }
   | { type: 'ready' }
-  | { type: 'partial'; text: string }
+  | { type: 'partial'; text: string; segments?: TranscriptionSegment[] }
+  | { type: 'stream-ready' }
   | { type: 'result'; result: TranscriptionResult }
   | { type: 'error'; error: string };
 
