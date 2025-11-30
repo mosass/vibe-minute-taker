@@ -34,17 +34,17 @@
 
 **⚠️ CRITICAL**: No user story work can begin until this phase is complete
 
-- [ ] T009 Implement IndexedDB service in `src/services/db.service.ts` using idb library
-- [ ] T010 Implement OPFS service in `src/services/opfs.service.ts` for file operations
-- [ ] T011 [P] Create `useOnlineStatus` composable in `src/composables/useOnlineStatus.ts`
-- [ ] T012 [P] Create `useInstallPrompt` composable in `src/composables/useInstallPrompt.ts`
-- [ ] T013 Create base layout components:
+- [x] T009 Implement IndexedDB service in `src/services/db.service.ts` using idb library
+- [x] T010 Implement OPFS service in `src/services/opfs.service.ts` for file operations
+- [x] T011 [P] Create `useOnlineStatus` composable in `src/composables/useOnlineStatus.ts`
+- [x] T012 [P] Create `useInstallPrompt` composable in `src/composables/useInstallPrompt.ts`
+- [x] T013 Create base layout components:
   - `src/components/common/AppHeader.vue` - Header with title and status
   - `src/components/common/BottomNav.vue` - Navigation tabs
   - `src/components/common/ProgressBar.vue` - Reusable progress
   - `src/components/common/EmptyState.vue` - Empty list placeholder
-- [ ] T014 Create `src/App.vue` with layout structure and router-view
-- [ ] T015 Create `src/components/setup/OfflineIndicator.vue` for network status
+- [x] T014 Create `src/App.vue` with layout structure and router-view
+- [x] T015 Create `src/components/setup/OfflineIndicator.vue` for network status
 
 **Checkpoint**: Foundation ready - can store/retrieve data in IndexedDB and OPFS, app shell renders
 
