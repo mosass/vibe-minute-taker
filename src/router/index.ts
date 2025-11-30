@@ -6,8 +6,18 @@ const HomeView = () => import('@/views/HomeView.vue');
 const MeetingsView = () => import('@/views/MeetingsView.vue');
 const MeetingDetailView = () => import('@/views/MeetingDetailView.vue');
 const SettingsView = () => import('@/views/SettingsView.vue');
+const OnboardingView = () => import('@/views/OnboardingView.vue');
 
 const routes: RouteRecordRaw[] = [
+  {
+    path: '/onboarding',
+    name: 'onboarding',
+    component: OnboardingView,
+    meta: {
+      title: 'Welcome',
+      hideNavigation: true
+    }
+  },
   {
     path: '/',
     name: 'home',
@@ -56,10 +66,29 @@ const router = createRouter({
   routes
 });
 
-// Update document title on navigation
+/**
+ * Check if user has completed onboarding
+ */
+function hasCompletedOnboarding(): boolean {
+  try {
+    return localStorage.getItem('onboarding-complete') === 'true';
+  } catch {
+    return true; // If storage is not available, skip onboarding
+  }
+}
+
+// Navigation guard for first-time users
 router.beforeEach((to, _from, next) => {
+  // Update document title
   const title = to.meta?.title as string | undefined;
   document.title = title ? `${title} | Minute Taker` : 'Minute Taker';
+  
+  // Redirect first-time users to onboarding
+  if (to.name !== 'onboarding' && !hasCompletedOnboarding()) {
+    next({ name: 'onboarding' });
+    return;
+  }
+  
   next();
 });
 

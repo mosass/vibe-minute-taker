@@ -3,6 +3,7 @@ import { RouterView, useRoute, useRouter } from 'vue-router';
 import { computed, ref, onMounted } from 'vue';
 import AppHeader from '@/components/common/AppHeader.vue';
 import BottomNav from '@/components/common/BottomNav.vue';
+import ToastContainer from '@/components/common/ToastContainer.vue';
 import OfflineIndicator from '@/components/setup/OfflineIndicator.vue';
 import InstallPrompt from '@/components/setup/InstallPrompt.vue';
 import { useOnlineStatus } from '@/composables/useOnlineStatus';
@@ -47,6 +48,11 @@ const pageTitle = computed(() => {
   return (route.meta?.title as string) ?? 'Minute Taker';
 });
 
+// Check if navigation should be hidden (e.g., on onboarding)
+const hideNavigation = computed(() => {
+  return route.meta?.hideNavigation === true;
+});
+
 // Show back button on detail pages
 const showBack = computed(() => {
   return route.path.includes('/meetings/') && route.path !== '/meetings';
@@ -83,10 +89,11 @@ router.afterEach(() => {
 <template>
   <div class="min-h-screen flex flex-col bg-gray-50 dark:bg-gray-900">
     <!-- Offline Banner (full width, above header) -->
-    <OfflineIndicator v-if="!isOnline" />
+    <OfflineIndicator v-if="!isOnline && !hideNavigation" />
     
     <!-- App Header -->
     <AppHeader 
+      v-if="!hideNavigation"
       :title="pageTitle" 
       :show-back="showBack"
       @back="handleBack"
@@ -103,14 +110,17 @@ router.afterEach(() => {
 
     <!-- Install Prompt Banner (above bottom nav) -->
     <InstallPrompt 
-      v-if="showInstallBanner"
+      v-if="showInstallBanner && !hideNavigation"
       variant="banner"
       @installed="handleInstalled"
       @dismissed="handleDismissed"
     />
 
     <!-- Bottom Navigation -->
-    <BottomNav />
+    <BottomNav v-if="!hideNavigation" />
+
+    <!-- Toast Notifications -->
+    <ToastContainer />
   </div>
 </template>
 

@@ -2,10 +2,96 @@
  * Audio Recording Service
  * Handles audio recording using MediaRecorder API
  * Provides start/stop/pause/resume controls with chunk collection
+ * Integrates with Media Session API for lock screen controls
  */
 
 import { AUDIO_CONFIG } from '@/utils/constants';
 import type { RecordingResult, AudioAmplitude } from '@/types/audio';
+
+/**
+ * Media Session metadata for recording
+ */
+interface MediaSessionMetadata {
+  title?: string;
+  artist?: string;
+}
+
+/**
+ * Set up Media Session API for recording controls
+ * Shows recording metadata on lock screen and handles media key events
+ */
+function setupMediaSession(
+  metadata: MediaSessionMetadata,
+  handlers: {
+    onPlay?: () => void;
+    onPause?: () => void;
+    onStop?: () => void;
+  }
+): void {
+  if (!('mediaSession' in navigator)) {
+    console.log('Media Session API not supported');
+    return;
+  }
+
+  try {
+    // Set metadata
+    navigator.mediaSession.metadata = new MediaMetadata({
+      title: metadata.title || 'Recording Meeting',
+      artist: metadata.artist || 'Minute Taker',
+      album: 'Meeting Notes',
+      artwork: [
+        { src: '/icons/icon-192.png', sizes: '192x192', type: 'image/png' },
+        { src: '/icons/icon-512.png', sizes: '512x512', type: 'image/png' }
+      ]
+    });
+
+    // Set playback state
+    navigator.mediaSession.playbackState = 'playing';
+
+    // Set action handlers
+    if (handlers.onPlay) {
+      navigator.mediaSession.setActionHandler('play', handlers.onPlay);
+    }
+    if (handlers.onPause) {
+      navigator.mediaSession.setActionHandler('pause', handlers.onPause);
+    }
+    if (handlers.onStop) {
+      navigator.mediaSession.setActionHandler('stop', handlers.onStop);
+    }
+  } catch (error) {
+    console.warn('Failed to set up Media Session:', error);
+  }
+}
+
+/**
+ * Update Media Session playback state
+ */
+function updateMediaSessionState(state: 'playing' | 'paused' | 'none'): void {
+  if (!('mediaSession' in navigator)) return;
+
+  try {
+    navigator.mediaSession.playbackState = state;
+  } catch (error) {
+    console.warn('Failed to update Media Session state:', error);
+  }
+}
+
+/**
+ * Clear Media Session metadata and handlers
+ */
+function clearMediaSession(): void {
+  if (!('mediaSession' in navigator)) return;
+
+  try {
+    navigator.mediaSession.metadata = null;
+    navigator.mediaSession.playbackState = 'none';
+    navigator.mediaSession.setActionHandler('play', null);
+    navigator.mediaSession.setActionHandler('pause', null);
+    navigator.mediaSession.setActionHandler('stop', null);
+  } catch (error) {
+    console.warn('Failed to clear Media Session:', error);
+  }
+}
 
 /**
  * Audio recording service event callbacks
@@ -197,10 +283,39 @@ export class AudioRecordingService {
       // Start amplitude visualization
       this.startAmplitudeTracking();
 
+      // Set up Media Session for lock screen controls
+      this.setupMediaSessionForRecording();
+
     } catch (error) {
       this.cleanup();
       throw error;
     }
+  }
+
+  /**
+   * Set up Media Session API for recording
+   */
+  private setupMediaSessionForRecording(): void {
+    setupMediaSession(
+      { title: 'Recording Meeting', artist: 'Minute Taker' },
+      {
+        onPause: () => {
+          if (this.state === 'recording') {
+            this.pause();
+          }
+        },
+        onPlay: () => {
+          if (this.state === 'paused') {
+            this.resume();
+          }
+        },
+        onStop: () => {
+          // Note: stop is handled by the service consumer, not here
+          // This just triggers the callback to let the UI handle it
+          this.callbacks.onStateChange?.('inactive');
+        }
+      }
+    );
   }
 
   /**
@@ -214,6 +329,7 @@ export class AudioRecordingService {
     this.pauseStartTime = Date.now();
     this.mediaRecorder.pause();
     this.stopAmplitudeTracking();
+    updateMediaSessionState('paused');
   }
 
   /**
@@ -227,6 +343,7 @@ export class AudioRecordingService {
     this.pausedDuration += Date.now() - this.pauseStartTime;
     this.mediaRecorder.resume();
     this.startAmplitudeTracking();
+    updateMediaSessionState('playing');
   }
 
   /**
@@ -346,6 +463,9 @@ export class AudioRecordingService {
    */
   private cleanup(): void {
     this.stopAmplitudeTracking();
+
+    // Clear Media Session
+    clearMediaSession();
 
     // Stop media tracks
     if (this.mediaStream) {

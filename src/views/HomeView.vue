@@ -19,6 +19,7 @@ import { useModelManager } from '@/composables/useModelManager';
 import { useAudioRecorder } from '@/composables/useAudioRecorder';
 import { useTranscription } from '@/composables/useTranscription';
 import { useOPFS } from '@/composables/useOPFS';
+import { useToast } from '@/composables/useToast';
 
 // Services
 import { 
@@ -55,6 +56,9 @@ const route = useRoute();
 
 // OPFS composable
 const { importAudioFile } = useOPFS();
+
+// Toast notifications
+const toast = useToast();
 
 // View states
 type ViewState = 'loading' | 'needsModel' | 'ready' | 'recording' | 'processing' | 'complete' | 'error' | 'importing';
@@ -345,7 +349,9 @@ async function handleRecordStop(): Promise<void> {
     // Batch transcription (default or fallback)
     await processRecording(result);
   } catch (err) {
-    errorMessage.value = err instanceof Error ? err.message : ERROR_MESSAGES.RECORDING_FAILED;
+    const errorMsg = err instanceof Error ? err.message : ERROR_MESSAGES.RECORDING_FAILED;
+    errorMessage.value = errorMsg;
+    toast.error(errorMsg);
     viewState.value = 'error';
   }
 }
@@ -382,6 +388,7 @@ function handleCancel(): void {
   liveTranscriptText.value = '';
   liveTranscriptSegments.value = [];
   viewState.value = 'ready';
+  toast.info('Recording cancelled');
 }
 
 /**
@@ -416,13 +423,18 @@ async function processRecording(result: RecordingResult, existingAudioId?: strin
     transcriptionStage.value = 'complete';
     viewState.value = 'complete';
     
+    // Show success toast
+    toast.success('Meeting saved successfully!');
+    
     // Clear import state
     importedFile.value = null;
     importedFileName.value = '';
     importedFileSize.value = 0;
   } catch (err) {
     console.error('Transcription failed:', err);
-    errorMessage.value = err instanceof Error ? err.message : ERROR_MESSAGES.TRANSCRIPTION_FAILED;
+    const errorMsg = err instanceof Error ? err.message : ERROR_MESSAGES.TRANSCRIPTION_FAILED;
+    errorMessage.value = errorMsg;
+    toast.error(errorMsg);
     viewState.value = 'error';
   }
 }

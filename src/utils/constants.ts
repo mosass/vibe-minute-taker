@@ -27,7 +27,9 @@ export const MODEL_CONFIG = {
   // Alternative larger model for better accuracy
   LARGE_MODEL_ID: 'Xenova/whisper-small',
   // Model file patterns for OPFS storage
-  MODEL_FILES: ['config.json', 'tokenizer.json', 'model.onnx']
+  MODEL_FILES: ['config.json', 'tokenizer.json', 'model.onnx'],
+  // Estimated model size in bytes (whisper-tiny ~40MB)
+  ESTIMATED_SIZE: 40 * 1024 * 1024
 } as const;
 
 // Audio recording configuration

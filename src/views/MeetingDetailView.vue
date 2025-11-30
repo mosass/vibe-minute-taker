@@ -8,18 +8,28 @@
 import { ref, onMounted, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { useMeetings } from '@/composables/useMeetings';
+import { useToast } from '@/composables/useToast';
+import { readAudioFile } from '@/services/opfs.service';
 import MeetingDetail from '@/components/meetings/MeetingDetail.vue';
+import MeetingDetailSkeleton from '@/components/common/MeetingDetailSkeleton.vue';
+import AudioPlayer from '@/components/common/AudioPlayer.vue';
 import EmptyState from '@/components/common/EmptyState.vue';
 import type { Meeting } from '@/types/meeting';
 
 const route = useRoute();
 const router = useRouter();
 const { getMeetingById, updateTitle, updateTranscript, removeMeeting, isLoading, error } = useMeetings();
+const toast = useToast();
 
 // Local state
 const meeting = ref<Meeting | null>(null);
 const isSaving = ref(false);
 const notFound = ref(false);
+
+// Audio playback state
+const showAudioPlayer = ref(false);
+const audioBlob = ref<Blob | null>(null);
+const isLoadingAudio = ref(false);
 
 // Get meeting ID from route
 const meetingId = route.params.id as string;
@@ -27,6 +37,8 @@ const meetingId = route.params.id as string;
 // Load meeting on mount
 async function loadMeeting(id: string) {
   notFound.value = false;
+  showAudioPlayer.value = false;
+  audioBlob.value = null;
   const result = await getMeetingById(id);
   
   if (result) {
@@ -57,6 +69,9 @@ async function handleTitleUpdate(title: string) {
   
   if (success && meeting.value) {
     meeting.value = { ...meeting.value, title, updatedAt: new Date() };
+    toast.success('Title updated');
+  } else {
+    toast.error('Failed to update title');
   }
 }
 
@@ -70,6 +85,9 @@ async function handleTranscriptUpdate(transcript: string) {
   
   if (success && meeting.value) {
     meeting.value = { ...meeting.value, transcript, updatedAt: new Date() };
+    toast.success('Transcript saved');
+  } else {
+    toast.error('Failed to save transcript');
   }
 }
 
@@ -80,31 +98,61 @@ async function handleDelete() {
   const success = await removeMeeting(meeting.value.id);
   
   if (success) {
+    toast.success('Meeting deleted');
     // Navigate back to meetings list
     router.push('/meetings');
   } else {
-    // Could show an error toast here
-    console.error('Failed to delete meeting');
+    toast.error('Failed to delete meeting');
   }
 }
 
-// Handle play audio (placeholder - will be implemented in Phase 8)
-function handlePlayAudio() {
-  // TODO: Implement audio playback in Phase 8
-  console.log('Play audio for meeting:', meeting.value?.id);
-  alert('Audio playback will be available soon!');
+// Handle play audio
+async function handlePlayAudio() {
+  if (!meeting.value?.audioFileId) {
+    toast.error('No audio file available');
+    return;
+  }
+  
+  // If already loaded, just show the player
+  if (audioBlob.value) {
+    showAudioPlayer.value = true;
+    return;
+  }
+  
+  isLoadingAudio.value = true;
+  
+  try {
+    const blob = await readAudioFile(meeting.value.audioFileId);
+    if (blob) {
+      audioBlob.value = blob;
+      showAudioPlayer.value = true;
+    } else {
+      toast.error('Audio file not found');
+    }
+  } catch (err) {
+    console.error('Failed to load audio:', err);
+    toast.error('Failed to load audio file');
+  } finally {
+    isLoadingAudio.value = false;
+  }
+}
+
+// Handle audio player close
+function handleAudioPlayerClose() {
+  showAudioPlayer.value = false;
+}
+
+// Handle audio player error
+function handleAudioError(err: Error) {
+  console.error('Audio playback error:', err);
+  toast.error('Audio playback failed');
 }
 </script>
 
 <template>
   <div class="flex-1 flex flex-col overflow-hidden">
-    <!-- Loading state -->
-    <div 
-      v-if="isLoading && !meeting" 
-      class="flex-1 flex items-center justify-center"
-    >
-      <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-600"></div>
-    </div>
+    <!-- Loading skeleton -->
+    <MeetingDetailSkeleton v-if="isLoading && !meeting" />
 
     <!-- Not found state -->
     <EmptyState
@@ -152,5 +200,34 @@ function handlePlayAudio() {
       @delete="handleDelete"
       @play-audio="handlePlayAudio"
     />
+
+    <!-- Audio player overlay -->
+    <Teleport to="body">
+      <div 
+        v-if="showAudioPlayer && audioBlob"
+        class="fixed inset-x-0 bottom-0 z-50 p-4 pb-20 bg-black/50"
+        @click.self="handleAudioPlayerClose"
+      >
+        <AudioPlayer
+          :audio-blob="audioBlob"
+          @close="handleAudioPlayerClose"
+          @error="handleAudioError"
+        />
+      </div>
+    </Teleport>
+
+    <!-- Loading audio indicator -->
+    <div 
+      v-if="isLoadingAudio"
+      class="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
+    >
+      <div class="bg-white dark:bg-gray-800 rounded-lg p-6 flex items-center gap-3">
+        <svg class="w-6 h-6 animate-spin text-primary-600" fill="none" viewBox="0 0 24 24">
+          <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+          <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+        </svg>
+        <span class="text-gray-700 dark:text-gray-300">Loading audio...</span>
+      </div>
+    </div>
   </div>
 </template>

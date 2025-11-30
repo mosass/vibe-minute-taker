@@ -3,17 +3,19 @@
 **Session Duration**: ~2 hours
 **Audience**: Developers learning about Progressive Web Apps
 **Goal**: Demonstrate PWA capabilities through a real-world meeting notes app
+**Last Updated**: December 2025
 
 ---
 
 ## Pre-Demo Setup
 
 ### Prepare Environment
-1. Clear browser data for fresh install experience
+1. Clear browser data for fresh install experience (or use Incognito)
 2. Have Chrome DevTools ready (Application tab)
 3. Prepare a second device (phone) for mobile demo
 4. Have airplane mode ready to toggle
 5. Prepare a sample audio file for import demo
+6. **Reset onboarding**: Clear `onboarding-complete` from localStorage
 
 ### Network Setup
 - Start with online connection
@@ -23,6 +25,21 @@
 ---
 
 ## Demo Script
+
+### Part 0: Onboarding Experience (5 min) ✨ NEW
+
+#### Demo Action: First-Time User Flow
+1. Open app in a fresh browser/incognito
+2. **Show onboarding wizard**:
+   - Welcome screen with app introduction
+   - Feature highlights (recording, AI, offline, privacy)
+   - Microphone permission request
+   - AI model download prompt
+3. "This guided setup ensures users understand the app and have everything ready"
+
+**Key Message**: "First impressions matter - a good onboarding reduces confusion and support requests."
+
+---
 
 ### Part 1: Introduction to PWA (15 min)
 
@@ -236,6 +253,16 @@ window.addEventListener('offline', updateUI);
 4. Delete a meeting
 5. Show data persists after app close
 
+#### Demo Action: Audio Playback ✨ NEW
+1. Open a saved meeting
+2. Click "Play Audio" button
+3. **Show audio player controls**:
+   - Play/pause toggle
+   - Seek bar with time display
+   - Skip forward/backward 10s
+   - Close button
+4. "Original audio is preserved in OPFS alongside the transcript"
+
 #### IndexedDB
 1. **DevTools → Application → IndexedDB**
 2. Show `minute-taker-db`
@@ -282,6 +309,10 @@ window.addEventListener('offline', updateUI);
 | ✅ Media Session | Lock screen controls | Native integration |
 | ✅ Share Target | Share from Files | Receive shared files |
 | ✅ Responsive | Desktop + Mobile | One codebase |
+| ✅ Onboarding | First-run wizard | User guidance |
+| ✅ Audio Playback | Play saved recordings | OPFS audio streaming |
+| ✅ Toast Notifications | Success/error feedback | User feedback |
+| ✅ Loading Skeletons | Async content placeholders | Perceived performance |
 
 ---
 

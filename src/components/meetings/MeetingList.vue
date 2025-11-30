@@ -8,6 +8,7 @@
 import { computed } from 'vue';
 import type { MeetingListItem } from '@/types/meeting';
 import MeetingCard from './MeetingCard.vue';
+import MeetingListSkeleton from '@/components/common/MeetingListSkeleton.vue';
 import EmptyState from '@/components/common/EmptyState.vue';
 
 interface Props {
@@ -45,26 +46,7 @@ function handleMeetingDelete(id: string) {
 <template>
   <div class="flex-1 flex flex-col">
     <!-- Loading skeleton -->
-    <div v-if="isLoading" class="space-y-3 p-4">
-      <div 
-        v-for="i in 3" 
-        :key="i"
-        class="bg-white dark:bg-gray-800 rounded-lg p-4 animate-pulse"
-      >
-        <div class="flex items-start justify-between gap-3 mb-2">
-          <div class="h-5 bg-gray-200 dark:bg-gray-700 rounded w-2/3"></div>
-          <div class="h-4 w-4 bg-gray-200 dark:bg-gray-700 rounded-full"></div>
-        </div>
-        <div class="flex items-center gap-3 mb-2">
-          <div class="h-4 bg-gray-200 dark:bg-gray-700 rounded w-32"></div>
-          <div class="h-4 bg-gray-200 dark:bg-gray-700 rounded w-16"></div>
-        </div>
-        <div class="space-y-2">
-          <div class="h-4 bg-gray-200 dark:bg-gray-700 rounded w-full"></div>
-          <div class="h-4 bg-gray-200 dark:bg-gray-700 rounded w-4/5"></div>
-        </div>
-      </div>
-    </div>
+    <MeetingListSkeleton v-if="isLoading" :count="3" />
 
     <!-- Empty state -->
     <EmptyState 

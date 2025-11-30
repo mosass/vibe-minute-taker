@@ -295,29 +295,29 @@
 
 **Purpose**: Final polish, demo preparation, and cross-cutting improvements
 
-- [ ] T049 [P] Add Media Session API integration for recording controls:
+- [x] T049 [P] Add Media Session API integration for recording controls:
   - Update `src/services/audio.service.ts`
   - Show metadata when recording
   - Handle media key events
-- [ ] T050 [P] Add loading skeletons for async content:
+- [x] T050 [P] Add loading skeletons for async content:
   - Meeting list skeleton
   - Meeting detail skeleton
-- [ ] T051 [P] Add error handling and toast notifications:
+- [x] T051 [P] Add error handling and toast notifications:
   - Create toast composable
   - Show errors for recording/transcription failures
   - Success messages for save/delete
-- [ ] T052 Add onboarding/welcome screen for first-time users:
+- [x] T052 Add onboarding/welcome screen for first-time users:
   - Brief app introduction
   - Model download prompt
   - Microphone permission request
-- [ ] T053 [P] Add audio playback for saved recordings:
+- [x] T053 [P] Add audio playback for saved recordings:
   - Play button in MeetingDetail
   - Simple audio player controls
-- [ ] T054 Create `specs/001-minute-taker-pwa/pwa-demo-guide.md`:
+- [x] T054 Create `specs/001-minute-taker-pwa/pwa-demo-guide.md`:
   - Step-by-step demo script
   - Each PWA feature to highlight
   - Talking points for 2-hour session
-- [ ] T055 Final testing and bug fixes:
+- [x] T055 Final testing and bug fixes:
   - Test offline mode completely
   - Test on Chrome, Edge, Safari
   - Test install flow on mobile
