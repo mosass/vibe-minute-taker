@@ -1,14 +1,46 @@
 <script setup lang="ts">
 import { RouterView, useRoute, useRouter } from 'vue-router';
-import { computed } from 'vue';
+import { computed, ref, onMounted } from 'vue';
 import AppHeader from '@/components/common/AppHeader.vue';
 import BottomNav from '@/components/common/BottomNav.vue';
 import OfflineIndicator from '@/components/setup/OfflineIndicator.vue';
+import InstallPrompt from '@/components/setup/InstallPrompt.vue';
 import { useOnlineStatus } from '@/composables/useOnlineStatus';
+import { useInstallPrompt } from '@/composables/useInstallPrompt';
 
 const route = useRoute();
 const router = useRouter();
 const { isOnline } = useOnlineStatus();
+const { isInstalled, installState } = useInstallPrompt();
+
+// Track whether to show install prompt
+const showInstallBanner = ref(false);
+
+/**
+ * Check if user has completed at least one recording
+ * Used to show install prompt after first success
+ */
+function hasCompletedRecording(): boolean {
+  try {
+    return localStorage.getItem('first-recording-complete') === 'true';
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Check if install prompt should be shown
+ */
+function shouldShowInstallPrompt(): boolean {
+  // Don't show if already installed
+  if (isInstalled.value) return false;
+  
+  // Don't show if dismissed
+  if (installState.value === 'dismissed') return false;
+  
+  // Show if available and user has completed first recording
+  return installState.value === 'available' && hasCompletedRecording();
+}
 
 // Compute page title from route meta
 const pageTitle = computed(() => {
@@ -23,6 +55,29 @@ const showBack = computed(() => {
 const handleBack = () => {
   router.back();
 };
+
+const handleInstalled = () => {
+  showInstallBanner.value = false;
+};
+
+const handleDismissed = () => {
+  showInstallBanner.value = false;
+};
+
+// Check on mount and when route changes
+onMounted(() => {
+  showInstallBanner.value = shouldShowInstallPrompt();
+  
+  // Also listen for storage events (when recording completes in HomeView)
+  window.addEventListener('storage', () => {
+    showInstallBanner.value = shouldShowInstallPrompt();
+  });
+});
+
+// Watch for route changes to potentially show install prompt
+router.afterEach(() => {
+  showInstallBanner.value = shouldShowInstallPrompt();
+});
 </script>
 
 <template>
@@ -45,6 +100,14 @@ const handleBack = () => {
         </transition>
       </RouterView>
     </main>
+
+    <!-- Install Prompt Banner (above bottom nav) -->
+    <InstallPrompt 
+      v-if="showInstallBanner"
+      variant="banner"
+      @installed="handleInstalled"
+      @dismissed="handleDismissed"
+    />
 
     <!-- Bottom Navigation -->
     <BottomNav />

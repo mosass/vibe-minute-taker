@@ -197,30 +197,30 @@
 
 ### PWA Install Experience
 
-- [ ] T037 [US3] Create `src/components/setup/InstallPrompt.vue`:
+- [x] T037 [US3] Create `src/components/setup/InstallPrompt.vue`:
   - Banner prompting install
   - Install button with proper handling
   - Dismiss/later option
   - Show only on supported browsers
-- [ ] T038 [US3] Integrate InstallPrompt in App.vue:
+- [x] T038 [US3] Integrate InstallPrompt in App.vue:
   - Show after first successful recording
   - Persist dismissal preference
   - Handle already installed state
 
 ### Offline Enhancements
 
-- [ ] T039 [US3] Enhance service worker configuration in `vite.config.ts`:
+- [x] T039 [US3] Enhance service worker configuration in `vite.config.ts`:
   - Precache all app assets
   - Cache Transformers.js CDN resources
   - Handle offline fallback
-- [ ] T040 [US3] Add offline-aware UI throughout app:
+- [x] T040 [US3] Add offline-aware UI throughout app:
   - Show OfflineIndicator in header when offline
   - Disable model download button when offline
   - Show "Works offline" badge when model ready
 
 ### Settings View
 
-- [ ] T041 [US3] Create `src/views/SettingsView.vue`:
+- [x] T041 [US3] Create `src/views/SettingsView.vue`:
   - App info section
   - Model status (downloaded/size)
   - Storage usage display

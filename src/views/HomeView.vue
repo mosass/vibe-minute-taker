@@ -30,6 +30,7 @@ import RecordingControls from '@/components/recording/RecordingControls.vue';
 import WaveformVisualizer from '@/components/recording/WaveformVisualizer.vue';
 import TranscriptionProgress from '@/components/transcription/TranscriptionProgress.vue';
 import TranscriptView from '@/components/transcription/TranscriptView.vue';
+import OfflineBadge from '@/components/setup/OfflineBadge.vue';
 
 // Types
 import type { Meeting, TranscriptSegment } from '@/types/meeting';
@@ -254,6 +255,18 @@ async function saveMeeting(
   await createMeeting(meeting);
   
   savedMeetingId.value = meetingId;
+  
+  // Mark first recording as complete for install prompt trigger
+  try {
+    localStorage.setItem('first-recording-complete', 'true');
+    // Dispatch storage event for other components to detect
+    window.dispatchEvent(new StorageEvent('storage', {
+      key: 'first-recording-complete',
+      newValue: 'true'
+    }));
+  } catch {
+    // Storage not available
+  }
 }
 
 /**
@@ -349,10 +362,13 @@ onMounted(() => {
         @start="handleRecordStart"
       />
       
-      <!-- Hint text -->
-      <p class="text-sm text-gray-500 dark:text-gray-500">
-        All transcription happens on your device
-      </p>
+      <!-- Hint text with offline badge -->
+      <div class="flex flex-col items-center gap-2">
+        <OfflineBadge variant="success" size="sm" />
+        <p class="text-sm text-gray-500 dark:text-gray-500">
+          All transcription happens on your device
+        </p>
+      </div>
     </div>
 
     <!-- Recording state -->

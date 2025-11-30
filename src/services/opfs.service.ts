@@ -273,6 +273,17 @@ export async function getAudioStorageUsed(): Promise<number> {
   return total;
 }
 
+/**
+ * Delete all audio files
+ */
+export async function deleteAllAudioFiles(): Promise<void> {
+  const files = await listAudioFiles();
+  
+  for (const filename of files) {
+    await deleteFile(OPFS_PATHS.AUDIO, filename);
+  }
+}
+
 // ============================================================================
 // MODEL FILE OPERATIONS
 // ============================================================================
@@ -462,6 +473,7 @@ export const opfsService = {
   audioFileExists,
   listAudioFiles,
   getAudioStorageUsed,
+  deleteAllAudioFiles,
   
   // Model file operations
   saveModelFile,
