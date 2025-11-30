@@ -265,24 +265,24 @@
 
 ### File Import
 
-- [ ] T045 [US5] Create `useOPFS` composable in `src/composables/useOPFS.ts`:
+- [x] T045 [US5] Create `useOPFS` composable in `src/composables/useOPFS.ts`:
   - Save file to OPFS
   - Read file from OPFS
   - Delete file from OPFS
   - List files
-- [ ] T046 [US5] Add import functionality to HomeView:
+- [x] T046 [US5] Add import functionality to HomeView:
   - File picker button
   - Accept audio/* files
   - Show import progress
   - Trigger transcription
-- [ ] T047 [US5] Handle Share Target in service worker:
+- [x] T047 [US5] Handle Share Target in service worker:
   - Receive shared audio files
   - Store in temp location
   - Notify app to process
 
 ### Import UI
 
-- [ ] T048 [P] [US5] Create import button component in HomeView:
+- [x] T048 [P] [US5] Create import button component in HomeView:
   - Secondary action below record button
   - File picker trigger
   - Supported format hints

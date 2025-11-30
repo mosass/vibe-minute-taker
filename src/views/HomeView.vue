@@ -5,18 +5,20 @@
  * This is the primary entry point for recording meetings
  * and transcribing audio using edge AI.
  * 
- * Supports two modes:
+ * Supports:
  * - Batch mode: Record first, then transcribe after stopping
  * - Live mode: Real-time transcription during recording
+ * - Import mode: Import existing audio files for transcription
  */
 
 import { ref, computed, onMounted, watch, onUnmounted } from 'vue';
-import { useRouter } from 'vue-router';
+import { useRouter, useRoute } from 'vue-router';
 
 // Composables
 import { useModelManager } from '@/composables/useModelManager';
 import { useAudioRecorder } from '@/composables/useAudioRecorder';
 import { useTranscription } from '@/composables/useTranscription';
+import { useOPFS } from '@/composables/useOPFS';
 
 // Services
 import { 
@@ -26,7 +28,7 @@ import {
   type TranscriptionProgressCallback
 } from '@/services/transcription.service';
 import { createMeeting, createAudioFile } from '@/services/db.service';
-import { saveAudioFile } from '@/services/opfs.service';
+import { saveAudioFile, readAudioFile } from '@/services/opfs.service';
 
 // Components
 import ModelDownloader from '@/components/setup/ModelDownloader.vue';
@@ -44,18 +46,28 @@ import type { AudioFile, RecordingResult } from '@/types/audio';
 import type { TranscriptionResult, TranscriptionSegment as TransSegment } from '@/types/transcription';
 
 // Utils
-import { generateMeetingTitle } from '@/utils/formatters';
+import { generateMeetingTitle, formatFileSize } from '@/utils/formatters';
 import { ERROR_MESSAGES, STORAGE_KEYS, AUDIO_CONFIG } from '@/utils/constants';
 
 // Router
 const router = useRouter();
+const route = useRoute();
+
+// OPFS composable
+const { importAudioFile } = useOPFS();
 
 // View states
-type ViewState = 'loading' | 'needsModel' | 'ready' | 'recording' | 'processing' | 'complete' | 'error';
+type ViewState = 'loading' | 'needsModel' | 'ready' | 'recording' | 'processing' | 'complete' | 'error' | 'importing';
 
 // State
 const viewState = ref<ViewState>('loading');
 const errorMessage = ref<string | null>(null);
+
+// Import state
+const importedFile = ref<File | null>(null);
+const importedFileName = ref<string>('');
+const importedFileSize = ref<number>(0);
+const fileInputRef = ref<HTMLInputElement | null>(null);
 
 // Live transcription mode state
 const isLiveMode = ref(false);
@@ -374,8 +386,10 @@ function handleCancel(): void {
 
 /**
  * Process a recording through transcription
+ * @param result - Recording result with blob data
+ * @param existingAudioId - Optional existing audio ID (for imported files)
  */
-async function processRecording(result: RecordingResult): Promise<void> {
+async function processRecording(result: RecordingResult, existingAudioId?: string): Promise<void> {
   viewState.value = 'processing';
   transcriptionStage.value = 'converting';
   transcriptionProgress.value = 0;
@@ -396,11 +410,16 @@ async function processRecording(result: RecordingResult): Promise<void> {
     transcriptionResult.value = transcription;
     
     // Save to database
-    await saveMeeting(result, transcription);
+    await saveMeeting(result, transcription, existingAudioId);
     
     // Show complete state
     transcriptionStage.value = 'complete';
     viewState.value = 'complete';
+    
+    // Clear import state
+    importedFile.value = null;
+    importedFileName.value = '';
+    importedFileSize.value = 0;
   } catch (err) {
     console.error('Transcription failed:', err);
     errorMessage.value = err instanceof Error ? err.message : ERROR_MESSAGES.TRANSCRIPTION_FAILED;
@@ -410,22 +429,31 @@ async function processRecording(result: RecordingResult): Promise<void> {
 
 /**
  * Save meeting to database
+ * @param recording - Recording result with blob data
+ * @param transcription - Transcription result
+ * @param existingAudioId - Optional existing audio ID (for imported files)
  */
 async function saveMeeting(
   recording: RecordingResult,
-  transcription: TranscriptionResult
+  transcription: TranscriptionResult,
+  existingAudioId?: string
 ): Promise<void> {
   const meetingId = crypto.randomUUID();
-  const audioId = crypto.randomUUID();
+  const audioId = existingAudioId || crypto.randomUUID();
   const now = new Date();
   
-  // Save audio file to OPFS
-  await saveAudioFile(audioId, recording.blob);
+  // Only save audio file if we don't have an existing one (new recording vs import)
+  if (!existingAudioId) {
+    await saveAudioFile(audioId, recording.blob);
+  }
+  
+  // Determine filename based on import or recording
+  const filename = importedFileName.value || `${audioId}.webm`;
   
   // Create audio file record
   const audioFile: AudioFile = {
     id: audioId,
-    filename: `${audioId}.webm`,
+    filename,
     mimeType: recording.mimeType,
     size: recording.blob.size,
     duration: recording.duration,
@@ -433,10 +461,17 @@ async function saveMeeting(
   };
   await createAudioFile(audioFile);
   
-  // Generate title from transcript or use date-based title
-  const title = transcription.text.trim() 
-    ? transcription.text.slice(0, 50).trim() + (transcription.text.length > 50 ? '...' : '')
-    : generateMeetingTitle(now);
+  // Generate title from imported filename, transcript, or use date-based title
+  let title: string;
+  if (importedFileName.value) {
+    // Use imported filename without extension
+    const nameWithoutExt = importedFileName.value.replace(/\.[^.]+$/, '');
+    title = nameWithoutExt.slice(0, 50) + (nameWithoutExt.length > 50 ? '...' : '');
+  } else if (transcription.text.trim()) {
+    title = transcription.text.slice(0, 50).trim() + (transcription.text.length > 50 ? '...' : '');
+  } else {
+    title = generateMeetingTitle(now);
+  }
   
   // Create meeting record
   const meeting: Meeting = {
@@ -498,7 +533,252 @@ function handleRetry(): void {
   errorMessage.value = null;
   stopLiveChunkProcessing();
   abortTranscription();
+  importedFile.value = null;
+  importedFileName.value = '';
+  importedFileSize.value = 0;
   viewState.value = 'ready';
+}
+
+// ============================================================================
+// IMPORT FUNCTIONALITY
+// ============================================================================
+
+/**
+ * Supported audio formats
+ */
+const SUPPORTED_AUDIO_FORMATS = [
+  'audio/wav',
+  'audio/mp3',
+  'audio/mpeg',
+  'audio/webm',
+  'audio/ogg',
+  'audio/m4a',
+  'audio/mp4',
+  'audio/x-m4a'
+];
+
+/**
+ * Trigger file input click
+ */
+function triggerFileInput(): void {
+  fileInputRef.value?.click();
+}
+
+/**
+ * Handle file selection from file picker
+ */
+async function handleFileSelect(event: Event): Promise<void> {
+  const input = event.target as HTMLInputElement;
+  const files = input.files;
+  
+  if (!files || files.length === 0) return;
+  
+  const file = files[0];
+  if (!file) return;
+  
+  // Reset the input so the same file can be selected again
+  input.value = '';
+  
+  await processImportedFile(file);
+}
+
+/**
+ * Handle files dropped via drag and drop
+ */
+async function handleFileDrop(event: DragEvent): Promise<void> {
+  event.preventDefault();
+  event.stopPropagation();
+  
+  const files = event.dataTransfer?.files;
+  if (!files || files.length === 0) return;
+  
+  const file = files[0];
+  if (!file) return;
+  
+  await processImportedFile(file);
+}
+
+/**
+ * Handle drag over event
+ */
+function handleDragOver(event: DragEvent): void {
+  event.preventDefault();
+  event.stopPropagation();
+}
+
+/**
+ * Process an imported audio file
+ */
+async function processImportedFile(file: File): Promise<void> {
+  // Validate file type
+  if (!file.type.startsWith('audio/')) {
+    errorMessage.value = 'Please select an audio file';
+    viewState.value = 'error';
+    return;
+  }
+  
+  // Check if format is supported
+  const isSupported = SUPPORTED_AUDIO_FORMATS.some(format => {
+    const formatType = format.split('/')[1];
+    return formatType && file.type.includes(formatType);
+  });
+  
+  if (!isSupported && !file.type.startsWith('audio/')) {
+    errorMessage.value = `Unsupported audio format: ${file.type}. Supported formats: WAV, MP3, WebM, OGG, M4A`;
+    viewState.value = 'error';
+    return;
+  }
+  
+  // Store file info for display
+  importedFile.value = file;
+  importedFileName.value = file.name;
+  importedFileSize.value = file.size;
+  
+  // Show importing state
+  viewState.value = 'importing';
+  errorMessage.value = null;
+  
+  try {
+    // Import the file to OPFS
+    const result = await importAudioFile(file);
+    
+    if (!result.success || !result.data) {
+      throw new Error(result.error || 'Failed to import file');
+    }
+    
+    const { id, filename } = result.data;
+    
+    // Read the file back as blob for transcription
+    const audioBlob = await readAudioFile(id, filename.split('.').pop() || 'webm');
+    
+    if (!audioBlob) {
+      throw new Error('Failed to read imported audio file');
+    }
+    
+    // Create recording result for processing
+    const recordingResult: RecordingResult = {
+      blob: audioBlob,
+      duration: 0, // Will be determined during transcription
+      mimeType: file.type
+    };
+    
+    // Process through transcription
+    await processRecording(recordingResult, id);
+    
+  } catch (err) {
+    console.error('Import failed:', err);
+    errorMessage.value = err instanceof Error ? err.message : 'Failed to import audio file';
+    viewState.value = 'error';
+    importedFile.value = null;
+  }
+}
+
+/**
+ * Cancel import
+ */
+function cancelImport(): void {
+  importedFile.value = null;
+  importedFileName.value = '';
+  importedFileSize.value = 0;
+  viewState.value = 'ready';
+}
+
+/**
+ * Check for shared files on mount (Share Target API)
+ */
+async function checkForSharedFiles(): Promise<void> {
+  // Check if we received shared files via Share Target
+  if (route.path === '/share-target' || route.query.shared === 'true') {
+    // Try to get the shared file from the service worker
+    try {
+      // First try the service worker message channel
+      if ('serviceWorker' in navigator && navigator.serviceWorker.controller) {
+        const fileInfo = await getPendingShareFromServiceWorker();
+        
+        if (fileInfo) {
+          // Fetch the shared file from the SW cache
+          const response = await fetch(fileInfo.url);
+          if (response.ok) {
+            const blob = await response.blob();
+            // Get original filename from header
+            const originalFilename = response.headers.get('X-Original-Filename');
+            const filename = originalFilename ? decodeURIComponent(originalFilename) : fileInfo.name;
+            const file = new File([blob], filename, { type: fileInfo.type });
+            
+            // Clear the pending share
+            navigator.serviceWorker.controller.postMessage({ type: 'CLEAR_PENDING_SHARE' });
+            
+            await processImportedFile(file);
+          }
+        }
+      }
+    } catch (err) {
+      console.error('Failed to process shared file:', err);
+    }
+    
+    // Clear the URL params
+    router.replace('/');
+  }
+}
+
+/**
+ * Get pending share from service worker using message channel
+ */
+function getPendingShareFromServiceWorker(): Promise<{ url: string; name: string; type: string; size: number } | null> {
+  return new Promise((resolve) => {
+    if (!navigator.serviceWorker.controller) {
+      resolve(null);
+      return;
+    }
+    
+    const messageChannel = new MessageChannel();
+    
+    messageChannel.port1.onmessage = (event) => {
+      if (event.data && event.data.success) {
+        resolve(event.data.data);
+      } else {
+        resolve(null);
+      }
+    };
+    
+    navigator.serviceWorker.controller.postMessage(
+      { type: 'GET_PENDING_SHARE' },
+      [messageChannel.port2]
+    );
+    
+    // Timeout after 3 seconds
+    setTimeout(() => resolve(null), 3000);
+  });
+}
+
+/**
+ * Listen for shared files from service worker
+ */
+function setupServiceWorkerListener(): void {
+  if (!('serviceWorker' in navigator)) return;
+  
+  navigator.serviceWorker.addEventListener('message', async (event) => {
+    if (event.data && event.data.type === 'SHARED_FILE') {
+      const fileInfo = event.data.data;
+      
+      try {
+        const response = await fetch(fileInfo.url);
+        if (response.ok) {
+          const blob = await response.blob();
+          const originalFilename = response.headers.get('X-Original-Filename');
+          const filename = originalFilename ? decodeURIComponent(originalFilename) : fileInfo.name;
+          const file = new File([blob], filename, { type: fileInfo.type });
+          
+          // Clear the pending share
+          navigator.serviceWorker.controller?.postMessage({ type: 'CLEAR_PENDING_SHARE' });
+          
+          await processImportedFile(file);
+        }
+      } catch (err) {
+        console.error('Failed to process shared file from SW message:', err);
+      }
+    }
+  });
 }
 
 // Watch for recorder errors
@@ -509,8 +789,13 @@ watch(recorderError, (error) => {
 });
 
 // Initialize on mount
-onMounted(() => {
-  initializeView();
+onMounted(async () => {
+  // Setup listener for shared files from service worker
+  setupServiceWorkerListener();
+  
+  await initializeView();
+  // Check for shared files after initialization
+  await checkForSharedFiles();
 });
 
 // Cleanup on unmount
@@ -605,6 +890,39 @@ onUnmounted(() => {
         @start="handleRecordStart"
       />
       
+      <!-- Import audio button -->
+      <div 
+        class="flex flex-col items-center gap-2"
+        @drop="handleFileDrop"
+        @dragover="handleDragOver"
+      >
+        <button
+          type="button"
+          class="flex items-center gap-2 px-4 py-2 text-sm font-medium text-primary-600 dark:text-primary-400
+                 hover:text-primary-700 dark:hover:text-primary-300 hover:bg-primary-50 dark:hover:bg-primary-900/30
+                 rounded-lg transition-colors"
+          @click="triggerFileInput"
+        >
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" 
+                  d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
+          </svg>
+          Import Audio File
+        </button>
+        <p class="text-xs text-gray-400 dark:text-gray-500">
+          WAV, MP3, WebM, OGG, M4A
+        </p>
+        
+        <!-- Hidden file input -->
+        <input
+          ref="fileInputRef"
+          type="file"
+          accept="audio/*"
+          class="hidden"
+          @change="handleFileSelect"
+        />
+      </div>
+      
       <!-- Hint text with offline badge -->
       <div class="flex flex-col items-center gap-2">
         <OfflineBadge variant="success" size="sm" />
@@ -677,6 +995,42 @@ onUnmounted(() => {
         @stop="handleRecordStop"
         @cancel="handleCancel"
       />
+    </div>
+
+    <!-- Importing state -->
+    <div 
+      v-else-if="viewState === 'importing'"
+      class="flex-1 flex flex-col items-center justify-center p-4 space-y-6"
+    >
+      <div class="w-16 h-16 rounded-full bg-primary-100 dark:bg-primary-900 flex items-center justify-center">
+        <svg class="w-8 h-8 text-primary-500 animate-pulse" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" 
+                d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
+        </svg>
+      </div>
+      
+      <div class="text-center">
+        <h2 class="text-xl font-semibold text-gray-900 dark:text-white mb-2">
+          Importing Audio
+        </h2>
+        <p class="text-gray-600 dark:text-gray-400 max-w-sm">
+          {{ importedFileName }}
+        </p>
+        <p class="text-sm text-gray-500 dark:text-gray-500 mt-1">
+          {{ formatFileSize(importedFileSize) }}
+        </p>
+      </div>
+      
+      <div class="w-12 h-12 border-4 border-primary-500 border-t-transparent rounded-full animate-spin" />
+      
+      <button
+        type="button"
+        class="py-2 px-4 text-sm font-medium text-gray-600 dark:text-gray-400 
+               hover:text-gray-900 dark:hover:text-white transition-colors"
+        @click="cancelImport"
+      >
+        Cancel
+      </button>
     </div>
 
     <!-- Processing state -->

@@ -15,7 +15,11 @@ export default defineConfig({
     vue(),
     tailwindcss(),
     VitePWA({
+      strategies: 'injectManifest',
+      srcDir: 'src',
+      filename: 'sw.ts',
       registerType: 'autoUpdate',
+      injectRegister: 'auto',
       includeAssets: ['icons/*.png', 'icons/*.svg'],
       manifest: {
         name: 'Minute Taker',
@@ -59,7 +63,7 @@ export default defineConfig({
           }
         }
       },
-      workbox: {
+      injectManifest: {
         // Precache all app assets for offline use
         globPatterns: ['**/*.{js,css,html,ico,png,svg,woff,woff2,ttf,eot}'],
         
@@ -68,81 +72,11 @@ export default defineConfig({
         
         // Increase max file size for precaching (for larger bundles)
         maximumFileSizeToCacheInBytes: 5 * 1024 * 1024, // 5 MB
-        
-        // Runtime caching for external resources
-        runtimeCaching: [
-          // Cache Hugging Face CDN (Transformers.js models)
-          {
-            urlPattern: /^https:\/\/cdn\.jsdelivr\.net\/.*/i,
-            handler: 'CacheFirst',
-            options: {
-              cacheName: 'transformers-cdn-cache',
-              expiration: {
-                maxEntries: 100,
-                maxAgeSeconds: 60 * 60 * 24 * 365 // 1 year
-              },
-              cacheableResponse: {
-                statuses: [0, 200]
-              }
-            }
-          },
-          // Cache Hugging Face Hub (model files)
-          {
-            urlPattern: /^https:\/\/huggingface\.co\/.*/i,
-            handler: 'CacheFirst',
-            options: {
-              cacheName: 'huggingface-cache',
-              expiration: {
-                maxEntries: 50,
-                maxAgeSeconds: 60 * 60 * 24 * 365 // 1 year
-              },
-              cacheableResponse: {
-                statuses: [0, 200]
-              }
-            }
-          },
-          // Cache Google Fonts (if used)
-          {
-            urlPattern: /^https:\/\/fonts\.googleapis\.com\/.*/i,
-            handler: 'StaleWhileRevalidate',
-            options: {
-              cacheName: 'google-fonts-stylesheets'
-            }
-          },
-          {
-            urlPattern: /^https:\/\/fonts\.gstatic\.com\/.*/i,
-            handler: 'CacheFirst',
-            options: {
-              cacheName: 'google-fonts-webfonts',
-              expiration: {
-                maxEntries: 30,
-                maxAgeSeconds: 60 * 60 * 24 * 365 // 1 year
-              },
-              cacheableResponse: {
-                statuses: [0, 200]
-              }
-            }
-          }
-        ],
-        
-        // Navigation fallback for SPA
-        navigateFallback: 'index.html',
-        navigateFallbackDenylist: [
-          // Don't fallback for API routes or assets
-          /^\/api\//,
-          /\.[a-zA-Z]+$/
-        ],
-        
-        // Clean up old caches
-        cleanupOutdatedCaches: true,
-        
-        // Skip waiting and claim clients immediately
-        skipWaiting: true,
-        clientsClaim: true
       },
       devOptions: {
         enabled: true,
-        type: 'module'
+        type: 'module',
+        navigateFallback: 'index.html'
       }
     })
   ],
