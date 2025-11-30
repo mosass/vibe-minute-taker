@@ -58,11 +58,11 @@
 
 ### Core Recording Implementation
 
-- [ ] T016 [US1] Create audio recording service in `src/services/audio.service.ts`:
+- [x] T016 [US1] Create audio recording service in `src/services/audio.service.ts`:
   - MediaRecorder setup with audio constraints
   - Start/stop/pause/resume controls
   - Chunk collection and blob creation
-- [ ] T017 [US1] Create `useAudioRecorder` composable in `src/composables/useAudioRecorder.ts`:
+- [x] T017 [US1] Create `useAudioRecorder` composable in `src/composables/useAudioRecorder.ts`:
   - Expose reactive recording state
   - Handle microphone permissions
   - Track elapsed time
