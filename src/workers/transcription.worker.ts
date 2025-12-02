@@ -47,7 +47,7 @@ function handleProgress(progress: { status: string; file?: string; loaded?: numb
     const downloadProgress: DownloadProgress = {
       loaded: progress.loaded ?? 0,
       total: progress.total ?? 0,
-      percentage: progress.progress !== undefined ? progress.progress * 100 : 0,
+      percentage: progress.progress !== undefined ? progress.progress : 0,
       status: progress.file ? `Downloading ${progress.file}...` : 'Downloading model...',
     };
     postResponse({ type: 'progress', progress: downloadProgress });

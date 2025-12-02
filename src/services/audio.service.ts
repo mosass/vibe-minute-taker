@@ -187,6 +187,22 @@ export class AudioRecordingService {
   }
 
   /**
+   * Request microphone permission
+   */
+  static async requestMicrophonePermission(): Promise<PermissionState> {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      stream.getTracks().forEach((track: MediaStreamTrack) => track.stop());
+      return 'granted';
+    } catch (error) {
+      if ((error as Error).name === 'NotAllowedError') {
+        return 'denied';
+      }
+      return 'prompt';
+    }
+  }
+
+  /**
    * Get current recording state
    */
   get state(): RecordingServiceState {

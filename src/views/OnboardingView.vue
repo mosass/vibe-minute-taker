@@ -134,6 +134,8 @@ async function requestMicPermission(): Promise<void> {
   try {
     const permission = await AudioRecordingService.checkMicrophonePermission();
     micPermission.value = permission;
+
+    console.log('Microphone permission:', permission);
     
     if (permission === 'granted') {
       toast.success('Microphone access granted');
@@ -141,6 +143,17 @@ async function requestMicPermission(): Promise<void> {
       setTimeout(nextStep, 500);
     } else if (permission === 'denied') {
       toast.error('Microphone access denied. You can enable it in browser settings.');
+    } else if (permission === 'prompt') {
+      // This should not happen as we just requested
+      const newPermission = await AudioRecordingService.requestMicrophonePermission();
+      if (newPermission === 'granted') {
+        micPermission.value = 'granted';
+        toast.success('Microphone access granted');
+        setTimeout(nextStep, 500);
+      } else {
+        micPermission.value = 'denied';
+        toast.error('Microphone access denied. You can enable it in browser settings.');
+      }
     }
   } catch (error) {
     console.error('Error checking mic permission:', error);
