@@ -9,7 +9,8 @@ import { useModelManager } from '@/composables/useModelManager';
 import { useOnlineStatus } from '@/composables/useOnlineStatus';
 import ProgressBar from '@/components/common/ProgressBar.vue';
 import { formatFileSize } from '@/utils/formatters';
-import { CloudArrowDownIcon, ExclamationTriangleIcon, CheckCircleIcon, WifiIcon } from '@heroicons/vue/24/outline';
+import { checkTranscriptionCompatibility, detectBrowser, type TranscriptionCompatibility, type BrowserInfo } from '@/utils/browserDetect';
+import { CloudArrowDownIcon, ExclamationTriangleIcon, CheckCircleIcon, WifiIcon, DevicePhoneMobileIcon } from '@heroicons/vue/24/outline';
 
 interface Props {
   /** Model ID to download (optional, uses default) */
@@ -50,6 +51,28 @@ const { isOnline } = useOnlineStatus();
 // Local state
 const downloadStartTime = ref<number | null>(null);
 const hasStartedDownload = ref(false);
+
+// Browser compatibility
+const browserInfo = ref<BrowserInfo>(detectBrowser());
+const compatibility = ref<TranscriptionCompatibility>(checkTranscriptionCompatibility());
+
+// Computed for compatibility warnings
+const showCompatibilityWarning = computed(() => {
+  return compatibility.value.hasWarnings || (browserInfo.value.isIOS && !isReady.value);
+});
+
+const compatibilityMessage = computed(() => {
+  if (!compatibility.value.isSupported) {
+    return compatibility.value.errors[0] || 'Transcription may not work on this device.';
+  }
+  if (browserInfo.value.isIOS) {
+    return 'iOS Safari has limited support. Transcription may be slower or require more memory.';
+  }
+  if (compatibility.value.hasWarnings) {
+    return compatibility.value.warnings[0];
+  }
+  return null;
+});
 
 // Computed
 const estimatedSize = computed(() => {
@@ -195,6 +218,22 @@ onMounted(async () => {
       <div class="flex items-center justify-between text-sm mt-2">
         <span class="text-gray-600 dark:text-gray-400">Works offline</span>
         <span class="font-medium text-success-500">Yes ✓</span>
+      </div>
+    </div>
+
+    <!-- Compatibility warning for iOS/limited browsers -->
+    <div 
+      v-if="showCompatibilityWarning && !isReady"
+      class="flex items-start gap-2 bg-warning-50 dark:bg-warning-900/30 text-warning-700 dark:text-warning-400 
+             rounded-lg p-3 mb-4"
+    >
+      <DevicePhoneMobileIcon class="w-5 h-5 shrink-0 mt-0.5" />
+      <div>
+        <span class="text-sm font-medium">Limited Support</span>
+        <p class="text-sm mt-0.5">{{ compatibilityMessage }}</p>
+        <p v-if="compatibility.recommendation" class="text-xs mt-1 opacity-75">
+          {{ compatibility.recommendation }}
+        </p>
       </div>
     </div>
 

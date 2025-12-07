@@ -18,6 +18,7 @@ import {
   type ModelInfo,
 } from '@/services/model.service';
 import type { ModelStatus, DownloadProgress, TranscriptionWorkerResponse } from '@/types/transcription';
+import { checkTranscriptionCompatibility, detectBrowser } from '@/utils/browserDetect';
 
 /**
  * Model manager state
@@ -71,7 +72,7 @@ function getOrCreateWorker(): Worker {
       new URL('../workers/transcription.worker.ts', import.meta.url),
       { type: 'module' }
     );
-    
+
     // Add error handler to catch worker errors
     workerInstance.onerror = (event) => {
       console.error('[ModelManager] Worker error:', event);
@@ -105,8 +106,8 @@ export function useModelManager(initialModelId?: string) {
 
   // Computed
   const isReady = computed(() => status.value === 'ready');
-  const isLoading = computed(() => 
-    status.value === 'downloading' || 
+  const isLoading = computed(() =>
+    status.value === 'downloading' ||
     status.value === 'loading' ||
     isInitializing.value
   );
@@ -186,6 +187,26 @@ export function useModelManager(initialModelId?: string) {
     error.value = null;
 
     try {
+      // Check browser compatibility first
+      const compatibility = checkTranscriptionCompatibility();
+      const browser = detectBrowser();
+
+      if (!compatibility.isSupported) {
+        const errorMessages = compatibility.errors.join('. ');
+        const recommendation = compatibility.recommendation
+          ? ` ${compatibility.recommendation}`
+          : '';
+        throw new Error(`Transcription is not supported on this device: ${errorMessages}.${recommendation}`);
+      }
+
+      // Log warnings for iOS devices
+      if (browser.isIOS) {
+        console.warn('[ModelManager] Running on iOS - transcription may have limitations');
+        if (compatibility.hasWarnings) {
+          console.warn('[ModelManager] Compatibility warnings:', compatibility.warnings);
+        }
+      }
+
       // Check storage availability
       const storage = await checkStorageQuota();
       if (!storage.available) {
@@ -256,10 +277,10 @@ export function useModelManager(initialModelId?: string) {
     error.value = null;
     status.value = 'not_downloaded';
     progress.value = null;
-    
+
     // Terminate existing worker to start fresh
     terminateWorker();
-    
+
     await initializeModel(currentModelId.value);
   }
 

@@ -52,19 +52,23 @@ function handleProgress(progress: { status: string; file?: string; loaded?: numb
     };
     postResponse({ type: 'progress', progress: downloadProgress });
   } else if (progress.status === 'ready') {
-    postResponse({ type: 'progress', progress: {
-      loaded: 100,
-      total: 100,
-      percentage: 100,
-      status: 'Model loaded and ready',
-    }});
+    postResponse({
+      type: 'progress', progress: {
+        loaded: 100,
+        total: 100,
+        percentage: 100,
+        status: 'Model loaded and ready',
+      }
+    });
   } else if (progress.status === 'initiate') {
-    postResponse({ type: 'progress', progress: {
-      loaded: 0,
-      total: 100,
-      percentage: 0,
-      status: progress.file ? `Preparing ${progress.file}...` : 'Initializing model...',
-    }});
+    postResponse({
+      type: 'progress', progress: {
+        loaded: 0,
+        total: 100,
+        percentage: 0,
+        status: progress.file ? `Preparing ${progress.file}...` : 'Initializing model...',
+      }
+    });
   }
 }
 
@@ -115,9 +119,30 @@ async function initializePipeline(modelId: string): Promise<void> {
     console.error('[Worker] Failed to initialize pipeline:', error);
     transcriber = null;
     currentModelId = null;
+
+    // Provide more helpful error messages
+    let errorMessage = 'Failed to initialize transcription model';
+
+    if (error instanceof Error) {
+      const errMsg = error.message.toLowerCase();
+
+      // Check for common WebAssembly errors
+      if (errMsg.includes('wasm') || errMsg.includes('webassembly')) {
+        errorMessage = 'WebAssembly error: Your browser may not fully support the AI model. Try using Chrome or Firefox on a desktop computer.';
+      } else if (errMsg.includes('memory') || errMsg.includes('oom') || errMsg.includes('out of memory')) {
+        errorMessage = 'Memory error: The AI model requires more memory than available. Try closing other apps or using a device with more RAM.';
+      } else if (errMsg.includes('network') || errMsg.includes('fetch') || errMsg.includes('load')) {
+        errorMessage = 'Network error: Failed to download the AI model. Please check your internet connection and try again.';
+      } else if (errMsg.includes('storage') || errMsg.includes('quota')) {
+        errorMessage = 'Storage error: Not enough space to cache the AI model. Please free up some storage.';
+      } else {
+        errorMessage = error.message;
+      }
+    }
+
     postResponse({
       type: 'error',
-      error: error instanceof Error ? error.message : 'Failed to initialize transcription model',
+      error: errorMessage,
     });
   } finally {
     isInitializing = false;
@@ -175,7 +200,7 @@ async function transcribeAudio(
     } else if (result && typeof result === 'object') {
       const resultObj = result as { text?: string; chunks?: Array<{ timestamp?: [number, number]; text?: string }> };
       text = resultObj.text || '';
-      
+
       // Extract timestamps/chunks if available
       if (resultObj.chunks && Array.isArray(resultObj.chunks)) {
         segments = resultObj.chunks.map((chunk: { timestamp?: [number, number]; text?: string }) => ({
@@ -309,17 +334,17 @@ async function processStreamingChunk(
     } else if (result && typeof result === 'object') {
       const resultObj = result as { text?: string; chunks?: Array<{ timestamp?: [number, number]; text?: string }> };
       chunkText = resultObj.text || '';
-      
+
       if (resultObj.chunks && Array.isArray(resultObj.chunks)) {
         for (const chunk of resultObj.chunks) {
           const start = (chunk.timestamp?.[0] ?? 0) + lastProcessedOffset;
           const end = (chunk.timestamp?.[1] ?? 0) + lastProcessedOffset;
-          
+
           accumulatedChunks.push({
             text: chunk.text ?? '',
             timestamp: [start, end],
           });
-          
+
           chunkSegments.push({
             id: generateSegmentId(),
             start,
@@ -335,9 +360,9 @@ async function processStreamingChunk(
 
     // Send partial result with accumulated text
     const accumulatedText = accumulatedChunks.map(c => c.text).join(' ').trim();
-    
+
     console.log(`[Worker] Streaming chunk ${chunkIndex} processed: "${chunkText.substring(0, 50)}..."`);
-    
+
     postResponse({
       type: 'partial',
       text: accumulatedText,
@@ -446,4 +471,4 @@ self.onmessage = async (event: MessageEvent<TranscriptionWorkerMessage>) => {
 };
 
 // Export for TypeScript module resolution
-export {};
+export { };
